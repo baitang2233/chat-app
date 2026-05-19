@@ -476,7 +476,9 @@ async function api(path, opts = {}) {
 async function loadConversations() {
   try {
     const res = await api('/api/conversations');
-    conversations = await res.json();
+    if (!res.ok) throw new Error('服务暂时不可用');
+    const data = await res.json();
+    conversations = Array.isArray(data) ? data : [];
     renderConvList();
   } catch (e) {
     console.error('加载对话列表失败:', e);

@@ -4,7 +4,7 @@ import functools
 import requests
 from flask import current_app, g, jsonify, request
 
-CLERK_API_URL_TEMPLATE = "https://{frontend_api}/v1/me"
+CLERK_API_URL_TEMPLATE = "{frontend_api}/v1/me"
 
 def get_clerk_config():
     return {
