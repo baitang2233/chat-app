@@ -1,0 +1,138 @@
+name: CI - Build and Push Docker Image
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          cd app
+          pip install -r requirements.txt
+
+      - name: Lint with flake8
+        run: |
+          pip install flake8
+          cd app
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+      - name: Security scan with bandit
+        run: |
+          pip install bandit
+          cd app
+          bandit -r . -f json -o bandit-report.json || true
+          bandit -r . || true
+
+  build-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./app
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Deploy to Docker Swarm
+        env:
+          SWARM_MANAGER_IP: ${{ secrets.SWARM_MANAGER_IP }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          REGISTRY: ${{ env.REGISTRY }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ env.SSH_USER }}@${{ env.SWARM_MANAGER_IP }} << 'EOF'
+            set -e
+            cd /opt/chat-app || mkdir -p /opt/chat-app && cd /opt/chat-app
+            
+            # 拉取最新代码（如果 git 仓库已存在）
+            if [ -d ".git" ]; then
+              git pull origin main || git pull origin master
+            fi
+            
+            # 写入环境变量文件（从 secrets 注入）
+            echo "API_KEY=${{ secrets.API_KEY }}" > .env
+            echo "DB_PATH=/data/chat.db" >> .env
+            echo "CLERK_PUBLISHABLE_KEY=${{ secrets.CLERK_PUBLISHABLE_KEY }}" >> .env
+            echo "CLERK_SECRET_KEY=${{ secrets.CLERK_SECRET_KEY }}" >> .env
+            echo "CLERK_FRONTEND_API=${{ secrets.CLERK_FRONTEND_API }}" >> .env
+            echo "DOCKER_REGISTRY=${{ env.REGISTRY }}" >> .env
+            echo "DOCKER_IMAGE_OWNER=${{ github.repository_owner }}" >> .env
+            echo "DOCKER_IMAGE_NAME=$(basename ${{ env.IMAGE_NAME }})" >> .env
+            echo "IMAGE_TAG=sha-$(git rev-parse --short HEAD)" >> .env
+            
+            # 登录容器仓库
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+            
+            # 更新 Swarm Stack
+            docker stack deploy -c docker-compose.swarm.yml chat-app --with-registry-auth
+            
+            # 等待更新完成
+            sleep 10
+            docker service ls
+            docker service ps chat-app_web --no-trunc
+          EOF

@@ -1,0 +1,83 @@
+version: "3.8"
+
+services:
+  web:
+    image: ${DOCKER_REGISTRY:-ghcr.io}/${DOCKER_IMAGE_OWNER:-yourname}/${DOCKER_IMAGE_NAME:-chat-app}:${IMAGE_TAG:-latest}
+    env_file: .env
+    deploy:
+      replicas: 3
+      update_config:
+        parallelism: 1
+        delay: 15s
+        failure_action: rollback
+        order: start-first
+        monitor: 30s
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      placement:
+        constraints:
+          - node.role == worker
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    networks:
+      - chat-app-network
+    volumes:
+      - chat-app-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - target: 80
+        published: 80
+        mode: host
+      - target: 443
+        published: 443
+        mode: host
+    configs:
+      - source: caddy_config
+        target: /etc/caddy/Caddyfile
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+    networks:
+      - chat-app-network
+    depends_on:
+      - web
+
+networks:
+  chat-app-network:
+    driver: overlay
+    attachable: true
+    ipam:
+      config:
+        - subnet: 10.0.10.0/24
+
+volumes:
+  chat-app-data:
+    driver: local
+
+configs:
+  caddy_config:
+    file: ./Caddyfile

@@ -1,0 +1,45 @@
+# 忽略本地环境文件
+.env
+.env.local
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# 虚拟环境
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# 测试
+.pytest_cache/
+.coverage
+
+# 本地数据（部署时使用挂载卷）
+data/
+*.db
+*.sqlite3
+
+# Git
+.git/
+.gitignore
+
+# CI/CD
+.github/
+
+# 文档
+PROJECT_UPGRADE_GUIDE.md
+DEPLOYMENT_GUIDE.md
+README.md
+
+# 其他
+*.md

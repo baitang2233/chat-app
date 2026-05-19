@@ -1,0 +1,10 @@
+www.wafy123.com, wafy123.com {
+    reverse_proxy web:5000 {
+        lb_policy round_robin
+        health_uri /api/health
+        health_interval 30s
+        health_timeout 10s
+    }
+}
+
+
