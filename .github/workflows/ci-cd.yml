@@ -44,11 +44,11 @@ jobs:
   build-and-push:
     needs: test
     runs-on: ubuntu-latest
+    # 仅在 push 事件时构建和推送镜像，PR 只跑 test
     if: github.event_name == 'push'
     permissions:
       contents: read
       packages: write
-      id-token: write
 
     steps:
       - name: Checkout repository
@@ -64,14 +64,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Get short SHA
+        id: sha
+        run: echo "short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=ref,event=branch
-            type=sha,prefix={{branch}}-
+            type=raw,value=sha-${{ steps.sha.outputs.short }}
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image
@@ -93,48 +96,55 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Get short SHA
+        id: sha
+        run: echo "short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
       - name: Setup SSH
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
+      - name: Copy compose file to server
+        run: |
+          scp -o StrictHostKeyChecking=no docker-compose.swarm.yml Caddyfile ${{ secrets.SSH_USER }}@${{ secrets.SWARM_MANAGER_IP }}:/opt/chat-app/
+
       - name: Deploy to Docker Swarm
         env:
           SWARM_MANAGER_IP: ${{ secrets.SWARM_MANAGER_IP }}
           SSH_USER: ${{ secrets.SSH_USER }}
-          REGISTRY: ${{ env.REGISTRY }}
-          IMAGE_NAME: ${{ env.IMAGE_NAME }}
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ env.SSH_USER }}@${{ env.SWARM_MANAGER_IP }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no ${{ env.SSH_USER }}@${{ env.SWARM_MANAGER_IP }} bash -s << 'DEPLOY_SCRIPT'
             set -e
-            cd /opt/chat-app || mkdir -p /opt/chat-app && cd /opt/chat-app
-            
-            # 拉取最新代码（如果 git 仓库已存在）
-            if [ -d ".git" ]; then
-              git pull origin main || git pull origin master
-            fi
-            
-            # 写入环境变量文件（从 secrets 注入）
-            echo "API_KEY=${{ secrets.API_KEY }}" > .env
-            echo "DB_PATH=/data/chat.db" >> .env
-            echo "MODEL_NAME=${{ secrets.MODEL_NAME }}" >> .env
-            echo "LLM_API_URL=${{ secrets.LLM_API_URL }}" >> .env
-            echo "CLERK_PUBLISHABLE_KEY=${{ secrets.CLERK_PUBLISHABLE_KEY }}" >> .env
-            echo "CLERK_SECRET_KEY=${{ secrets.CLERK_SECRET_KEY }}" >> .env
-            echo "CLERK_FRONTEND_API=${{ secrets.CLERK_FRONTEND_API }}" >> .env
-            echo "DOCKER_REGISTRY=${{ env.REGISTRY }}" >> .env
-            echo "DOCKER_IMAGE_OWNER=${{ github.repository_owner }}" >> .env
-            echo "DOCKER_IMAGE_NAME=$(basename ${{ env.IMAGE_NAME }})" >> .env
-            echo "IMAGE_TAG=sha-$(git rev-parse --short HEAD)" >> .env
-            
+            mkdir -p /opt/chat-app
+            cd /opt/chat-app
+
+            # 写入应用环境变量文件
+            cat > .env << 'ENVEOF'
+          API_KEY=${{ secrets.API_KEY }}
+          DB_PATH=/data/chat.db
+          MODEL_NAME=${{ secrets.MODEL_NAME }}
+          LLM_API_URL=${{ secrets.LLM_API_URL }}
+          CLERK_PUBLISHABLE_KEY=${{ secrets.CLERK_PUBLISHABLE_KEY }}
+          CLERK_SECRET_KEY=${{ secrets.CLERK_SECRET_KEY }}
+          CLERK_FRONTEND_API=${{ secrets.CLERK_FRONTEND_API }}
+          ENVEOF
+
+            # 设置镜像相关的环境变量（用于 docker stack deploy 替换 compose 文件中的变量）
+            export DOCKER_REGISTRY="${{ env.REGISTRY }}"
+            export DOCKER_IMAGE_OWNER="${{ github.repository_owner }}"
+            export DOCKER_IMAGE_NAME=$(echo "${{ env.IMAGE_NAME }}" | cut -d'/' -f2)
+            export IMAGE_TAG="sha-${{ steps.sha.outputs.short }}"
+
             # 登录容器仓库
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
-            
-            # 更新 Swarm Stack
+
+            # 用 export 的变量替换 compose 文件并部署
+            # docker stack deploy 不读取 .env，所以必须 export
             docker stack deploy -c docker-compose.swarm.yml chat-app --with-registry-auth
-            
+
             # 等待更新完成
             sleep 10
             docker service ls
-            docker service ps chat-app_web --no-trunc
-          EOF
+            docker service ps chat-app_web --no-trunc 2>/dev/null || true
+          DEPLOY_SCRIPT
