@@ -307,21 +307,6 @@
       justify-content: center;
     }
 
-    .login-modal {
-      background: #fff;
-      border-radius: 16px;
-      padding: 24px;
-      width: 100%;
-      max-width: 420px;
-      box-shadow: 0 20px 50px rgba(0,0,0,0.2);
-    }
-
-    .login-modal h2 {
-      margin: 0 0 16px 0;
-      text-align: center;
-      font-size: 20px;
-    }
-
     #clerk-signin-target {
       min-height: 280px;
     }
@@ -398,10 +383,7 @@
 
 <!-- 登录弹窗 -->
 <div class="login-modal-overlay" id="loginModal" style="display:none;">
-  <div class="login-modal">
-    <h2>欢迎回来</h2>
-    <div id="clerk-signin-target"></div>
-  </div>
+  <div id="clerk-signin-target"></div>
 </div>
 
 <script>
