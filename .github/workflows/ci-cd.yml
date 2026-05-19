@@ -117,6 +117,8 @@ jobs:
             # 写入环境变量文件（从 secrets 注入）
             echo "API_KEY=${{ secrets.API_KEY }}" > .env
             echo "DB_PATH=/data/chat.db" >> .env
+            echo "MODEL_NAME=${{ secrets.MODEL_NAME }}" >> .env
+            echo "LLM_API_URL=${{ secrets.LLM_API_URL }}" >> .env
             echo "CLERK_PUBLISHABLE_KEY=${{ secrets.CLERK_PUBLISHABLE_KEY }}" >> .env
             echo "CLERK_SECRET_KEY=${{ secrets.CLERK_SECRET_KEY }}" >> .env
             echo "CLERK_FRONTEND_API=${{ secrets.CLERK_FRONTEND_API }}" >> .env
