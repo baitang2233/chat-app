@@ -383,7 +383,7 @@ def chat():
 def not_found(e):
     if request.path.startswith("/api/"):
         return jsonify({"error": "NotFound", "message": "接口不存在"}), 404
-    return render_template("index.html")
+    return render_template("index.html", clerk_publishable_key=CLERK_PUBLISHABLE_KEY, clerk_frontend_api=CLERK_FRONTEND_API)
 
 
 @app.errorhandler(500)

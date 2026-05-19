@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI 聊天服务</title>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <!-- Clerk JS SDK -->
   <script
     async
     crossorigin="anonymous"
@@ -14,31 +13,27 @@
     type="text/javascript">
   </script>
   <style>
-    * { box-sizing: border-box; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
-      margin: 0;
-      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-      background: #f4f7fb;
-      color: #1f2937;
+      font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: #f0f2f5;
+      color: #1a1a2e;
       height: 100vh;
       overflow: hidden;
     }
 
-    .layout {
-      display: flex;
-      height: 100vh;
-      width: 100vw;
-    }
+    /* ── 布局 ── */
+    .app { display: flex; height: 100vh; }
 
     .sidebar {
-      width: 300px;
-      min-width: 240px;
+      width: 280px;
       background: #0f172a;
       color: #e2e8f0;
       display: flex;
       flex-direction: column;
-      border-right: 1px solid rgba(255, 255, 255, 0.08);
-      transition: transform 0.25s ease;
+      flex-shrink: 0;
+      transition: transform .25s;
       z-index: 20;
     }
 
@@ -47,703 +42,659 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      border-bottom: 1px solid rgba(255,255,255,.08);
     }
 
-    .sidebar-header h2 {
-      margin: 0;
-      font-size: 17px;
-      font-weight: 600;
-    }
+    .sidebar-header h2 { font-size: 16px; font-weight: 600; }
 
-    .btn {
-      border: none;
-      border-radius: 10px;
-      padding: 8px 12px;
-      cursor: pointer;
-      font-size: 13px;
-    }
-
-    .btn-primary {
-      background: #2563eb;
+    .btn-new {
+      background: #3b82f6;
       color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 6px 14px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background .2s;
     }
+    .btn-new:hover { background: #2563eb; }
 
-    .conversation-list {
+    .conv-list {
       flex: 1;
       overflow-y: auto;
-      padding: 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
+      padding: 8px;
     }
 
-    .conversation-item {
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid transparent;
-      border-radius: 10px;
-      padding: 10px;
+    .conv-item {
+      padding: 10px 12px;
+      border-radius: 8px;
+      cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 8px;
-      cursor: pointer;
-    }
-
-    .conversation-item:hover {
-      background: rgba(255, 255, 255, 0.1);
-    }
-
-    .conversation-item.active {
-      border-color: #60a5fa;
-      background: rgba(37, 99, 235, 0.25);
-    }
-
-    .conversation-title {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
       font-size: 14px;
-      flex: 1;
+      transition: background .15s;
+      margin-bottom: 2px;
+      word-break: break-all;
     }
+    .conv-item:hover { background: rgba(255,255,255,.08); }
+    .conv-item.active { background: rgba(59,130,246,.3); }
 
-    .delete-btn {
+    .conv-item .del-btn {
+      background: none;
       border: none;
-      background: transparent;
-      color: #fca5a5;
+      color: #94a3b8;
       cursor: pointer;
-      font-size: 14px;
+      font-size: 16px;
+      padding: 0 4px;
+      opacity: 0;
+      transition: opacity .15s;
+      flex-shrink: 0;
+    }
+    .conv-item:hover .del-btn { opacity: 1; }
+    .conv-item .del-btn:hover { color: #f87171; }
+
+    .sidebar-footer {
+      padding: 12px 16px;
+      border-top: 1px solid rgba(255,255,255,.08);
+      font-size: 13px;
+      color: #94a3b8;
     }
 
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .user-info img {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+    }
+
+    .user-info .user-name { font-weight: 500; color: #e2e8f0; }
+
+    .btn-logout {
+      background: none;
+      border: 1px solid #475569;
+      color: #94a3b8;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      margin-left: auto;
+      transition: all .2s;
+    }
+    .btn-logout:hover { border-color: #f87171; color: #f87171; }
+
+    /* ── 主区域 ── */
     .main {
       flex: 1;
       display: flex;
       flex-direction: column;
       min-width: 0;
-      position: relative;
     }
 
-    .topbar {
+    .main-header {
+      padding: 14px 20px;
+      background: #fff;
+      border-bottom: 1px solid #e5e7eb;
+      font-size: 16px;
+      font-weight: 600;
       display: flex;
       align-items: center;
-      gap: 10px;
-      padding: 14px 16px;
-      border-bottom: 1px solid #e5e7eb;
-      background: #fff;
+      gap: 12px;
     }
 
     .menu-btn {
       display: none;
+      background: none;
       border: none;
-      background: #eef2ff;
-      color: #1e40af;
-      border-radius: 8px;
-      width: 34px;
-      height: 34px;
+      font-size: 22px;
       cursor: pointer;
-      font-size: 18px;
     }
 
-    .chat-title {
-      font-size: 16px;
-      font-weight: 600;
-      margin: 0;
-      flex: 1;
-    }
-
-    .user-area {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .user-avatar {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      object-fit: cover;
-      border: 2px solid #e5e7eb;
-    }
-
-    .user-name {
-      font-size: 13px;
-      color: #6b7280;
-      max-width: 120px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .logout-btn {
-      border: none;
-      background: #fee2e2;
-      color: #dc2626;
-      border-radius: 8px;
-      padding: 6px 10px;
-      cursor: pointer;
-      font-size: 12px;
-    }
-
+    /* ── 消息区 ── */
     .messages {
       flex: 1;
       overflow-y: auto;
       padding: 20px;
       display: flex;
       flex-direction: column;
-      gap: 14px;
+      gap: 16px;
     }
 
-    .message {
-      max-width: 78%;
-      padding: 12px 14px;
-      border-radius: 14px;
-      line-height: 1.6;
+    .msg {
+      max-width: 75%;
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: 14px;
+      line-height: 1.7;
       word-break: break-word;
-      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
     }
 
-    .message.user {
+    .msg.user {
       align-self: flex-end;
-      background: #2563eb;
+      background: #3b82f6;
       color: #fff;
-      border-bottom-right-radius: 6px;
+      border-bottom-right-radius: 4px;
     }
 
-    .message.assistant {
+    .msg.assistant {
       align-self: flex-start;
       background: #fff;
-      color: #111827;
-      border-bottom-left-radius: 6px;
       border: 1px solid #e5e7eb;
+      border-bottom-left-radius: 4px;
     }
 
-    .message.assistant p { margin: 0.4em 0; }
-    .message.assistant pre {
-      background: #0b1020;
-      color: #e5e7eb;
-      padding: 10px;
+    .msg.assistant pre {
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: 12px;
       border-radius: 8px;
       overflow-x: auto;
+      margin: 8px 0;
+      font-size: 13px;
     }
 
-    .composer {
-      border-top: 1px solid #e5e7eb;
-      padding: 12px;
+    .msg.assistant code {
+      font-family: "Fira Code", "Consolas", monospace;
+      font-size: 13px;
+    }
+
+    .msg.assistant p { margin: 6px 0; }
+    .msg.assistant ul, .msg.assistant ol { padding-left: 20px; }
+
+    .empty-hint {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #9ca3af;
+      font-size: 15px;
+    }
+
+    .typing-indicator {
+      align-self: flex-start;
+      padding: 12px 16px;
       background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      border-bottom-left-radius: 4px;
+      color: #6b7280;
+      font-size: 14px;
     }
 
-    .composer-inner {
+    .typing-indicator .dots::after {
+      content: '';
+      animation: dots 1.5s steps(4, end) infinite;
+    }
+
+    @keyframes dots {
+      0%  { content: ''; }
+      25% { content: '.'; }
+      50% { content: '..'; }
+      75% { content: '...'; }
+    }
+
+    /* ── 输入区 ── */
+    .input-area {
+      padding: 12px 20px;
+      background: #fff;
+      border-top: 1px solid #e5e7eb;
       display: flex;
       gap: 10px;
       align-items: flex-end;
-      max-width: 980px;
-      margin: 0 auto;
     }
 
-    textarea {
+    .input-area textarea {
       flex: 1;
-      resize: none;
       border: 1px solid #d1d5db;
-      border-radius: 12px;
-      padding: 12px;
-      min-height: 46px;
-      max-height: 180px;
+      border-radius: 10px;
+      padding: 10px 14px;
       font-size: 14px;
+      font-family: inherit;
+      resize: none;
+      max-height: 120px;
+      min-height: 42px;
       line-height: 1.5;
       outline: none;
+      transition: border-color .2s;
     }
+    .input-area textarea:focus { border-color: #3b82f6; }
 
-    textarea:focus {
-      border-color: #60a5fa;
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
-    }
-
-    .send-btn {
-      background: #2563eb;
+    .btn-send {
+      background: #3b82f6;
       color: #fff;
       border: none;
       border-radius: 10px;
-      height: 44px;
-      min-width: 90px;
-      cursor: pointer;
+      padding: 10px 20px;
       font-size: 14px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background .2s;
     }
+    .btn-send:hover { background: #2563eb; }
+    .btn-send:disabled { background: #93c5fd; cursor: not-allowed; }
 
-    .send-btn:disabled {
-      opacity: 0.7;
-      cursor: not-allowed;
-    }
-
-    .loader {
-      width: 14px;
-      height: 14px;
-      border: 2px solid rgba(255, 255, 255, 0.6);
-      border-top-color: #fff;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      display: none;
-    }
-
-    .send-btn.loading .loader {
-      display: inline-block;
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-
-    /* 登录弹窗 */
-    .login-modal-overlay {
+    /* ── 登录遮罩 ── */
+    .login-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.5);
+      background: rgba(0,0,0,.45);
       z-index: 100;
       display: flex;
       align-items: center;
       justify-content: center;
     }
 
-    #clerk-signin-target {
-      min-height: 280px;
-    }
+    .hidden { display: none !important; }
 
-    .overlay {
-      display: none;
-    }
-
-    @media (max-width: 860px) {
-      .menu-btn { display: inline-flex; }
+    /* ── 移动端 ── */
+    @media (max-width: 768px) {
       .sidebar {
         position: fixed;
-        left: 0;
-        top: 0;
-        bottom: 0;
+        inset: 0;
+        width: 280px;
         transform: translateX(-100%);
       }
-      .sidebar.open {
-        transform: translateX(0);
-      }
-      .overlay {
-        display: none;
+      .sidebar.open { transform: translateX(0); }
+      .menu-btn { display: block; }
+
+      .mobile-overlay {
         position: fixed;
         inset: 0;
-        background: rgba(0, 0, 0, 0.35);
-        z-index: 10;
+        background: rgba(0,0,0,.3);
+        z-index: 15;
       }
-      .overlay.show {
-        display: block;
-      }
-      .message { max-width: 92%; }
-      .user-name { display: none; }
+
+      .msg { max-width: 90%; }
     }
   </style>
 </head>
 <body>
-<div class="layout" id="appLayout">
+
+<div class="app">
+  <!-- 侧边栏 -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
       <h2>对话列表</h2>
-      <button class="btn btn-primary" id="newConversationBtn">+ 新建</button>
+      <button class="btn-new" id="btnNew">+ 新建</button>
     </div>
-    <div class="conversation-list" id="conversationList"></div>
+    <div class="conv-list" id="convList"></div>
+    <div class="sidebar-footer" id="sidebarFooter"></div>
   </aside>
 
-  <div class="overlay" id="overlay"></div>
+  <!-- 移动端遮罩 -->
+  <div class="mobile-overlay hidden" id="mobileOverlay"></div>
 
-  <main class="main">
-    <div class="topbar">
+  <!-- 主区域 -->
+  <div class="main">
+    <div class="main-header">
       <button class="menu-btn" id="menuBtn">☰</button>
-      <h1 class="chat-title" id="chatTitle">AI 聊天</h1>
-      <div class="user-area" id="userArea">
-        <!-- 登录状态显示头像和注销按钮 -->
-      </div>
+      <span id="mainTitle">AI 聊天</span>
     </div>
-
-    <section class="messages" id="messages">
-      <div style="text-align:center;padding-top:40px;color:#9ca3af;font-size:15px;">
-        请先登录以开始使用
-      </div>
-    </section>
-
-    <div class="composer">
-      <div class="composer-inner">
-        <textarea id="messageInput" placeholder="输入消息，回车发送，Shift+回车换行" disabled></textarea>
-        <button class="send-btn" id="sendBtn" disabled>
-          <span class="loader"></span>
-          <span>发送</span>
-        </button>
-      </div>
+    <div class="messages" id="messages">
+      <div class="empty-hint" id="emptyHint">选择或新建一个对话开始聊天</div>
     </div>
-  </main>
+    <div class="input-area">
+      <textarea id="inputBox" rows="1" placeholder="输入消息，回车发送，Shift+回车换行" disabled></textarea>
+      <button class="btn-send" id="btnSend" disabled>发送</button>
+    </div>
+  </div>
 </div>
 
-<!-- 登录弹窗 -->
-<div class="login-modal-overlay" id="loginModal" style="display:none;">
-  <div id="clerk-signin-target"></div>
+<!-- 登录遮罩 -->
+<div class="login-overlay hidden" id="loginOverlay">
+  <div id="clerkSignIn"></div>
 </div>
 
 <script>
-  // ══════════════════════════════════════════════════════════════
-  // 全局变量
-  // ══════════════════════════════════════════════════════════════
-  const conversationListEl = document.getElementById('conversationList');
-  const messagesEl = document.getElementById('messages');
-  const messageInputEl = document.getElementById('messageInput');
-  const sendBtnEl = document.getElementById('sendBtn');
-  const newConversationBtnEl = document.getElementById('newConversationBtn');
-  const chatTitleEl = document.getElementById('chatTitle');
-  const sidebarEl = document.getElementById('sidebar');
-  const overlayEl = document.getElementById('overlay');
-  const menuBtnEl = document.getElementById('menuBtn');
-  const userAreaEl = document.getElementById('userArea');
-  const loginModalEl = document.getElementById('loginModal');
+// ════════════════════════════════════════════════════════════════
+// 状态
+// ════════════════════════════════════════════════════════════════
+let clerkInstance = null;
+let authToken = null;
+let currentUser = null;
+let conversations = [];
+let activeConvId = null;
+let isSending = false;
 
-  let conversations = [];
-  let activeConversationId = null;
-  let clerkInstance = null;
-  let sessionToken = null;
+const $ = id => document.getElementById(id);
 
-  // ══════════════════════════════════════════════════════════════
-  // Clerk 初始化
-  // ══════════════════════════════════════════════════════════════
-  async function initClerk() {
+const DOM = {
+  sidebar: $('sidebar'),
+  convList: $('convList'),
+  sidebarFooter: $('sidebarFooter'),
+  messages: $('messages'),
+  emptyHint: $('emptyHint'),
+  inputBox: $('inputBox'),
+  btnSend: $('btnSend'),
+  btnNew: $('btnNew'),
+  menuBtn: $('menuBtn'),
+  mainTitle: $('mainTitle'),
+  loginOverlay: $('loginOverlay'),
+  clerkSignIn: $('clerkSignIn'),
+  mobileOverlay: $('mobileOverlay'),
+};
+
+// ════════════════════════════════════════════════════════════════
+// Clerk 初始化
+// ════════════════════════════════════════════════════════════════
+window.addEventListener('load', async () => {
+  try {
     await window.Clerk.load();
     clerkInstance = window.Clerk;
 
-    // 监听认证状态变化
-    clerkInstance.addListener(async ({ user }) => {
+    if (clerkInstance.user) {
+      await onSignedIn();
+    } else {
+      showLogin();
+    }
+
+    // 监听登录/登出
+    clerkInstance.addListener(({ user }) => {
       if (user) {
-        sessionToken = await clerkInstance.session.getToken();
-        hideLoginModal();
-        renderUserArea(user);
-        enableChat();
-        await loadConversations();
+        onSignedIn();
       } else {
-        sessionToken = null;
-        showLoginModal();
-        renderUserArea(null);
-        disableChat();
-        conversations = [];
-        activeConversationId = null;
-        conversationListEl.innerHTML = '';
-        messagesEl.innerHTML = '<div style="text-align:center;padding-top:40px;color:#9ca3af;font-size:15px;">请先登录以开始使用</div>';
-        chatTitleEl.textContent = 'AI 聊天';
+        onSignedOut();
       }
     });
-
-    // 如果未登录则显示登录弹窗
-    if (!clerkInstance.user) {
-      showLoginModal();
-      mountSignInComponent();
-    } else {
-      sessionToken = await clerkInstance.session.getToken();
-      renderUserArea(clerkInstance.user);
-      enableChat();
-    }
+  } catch (e) {
+    console.error('Clerk 初始化失败:', e);
+    DOM.emptyHint.textContent = 'Clerk 加载失败，请刷新页面重试';
   }
+});
 
-  // 等待 Clerk 脚本加载完成
-  window.addEventListener('load', () => {
-    if (window.Clerk) {
-      initClerk();
-    } else {
-      // 如果脚本还没加载完，设置一个轮询等待
-      const interval = setInterval(() => {
-        if (window.Clerk) {
-          clearInterval(interval);
-          initClerk();
-        }
-      }, 100);
-    }
+function showLogin() {
+  DOM.loginOverlay.classList.remove('hidden');
+  clerkInstance.mountSignIn(DOM.clerkSignIn);
+}
+
+function hideLogin() {
+  DOM.loginOverlay.classList.add('hidden');
+  clerkInstance.unmountSignIn(DOM.clerkSignIn);
+}
+
+async function onSignedIn() {
+  // 获取 session token
+  const session = clerkInstance.session;
+  if (session) {
+    authToken = await session.getToken();
+  }
+  currentUser = clerkInstance.user;
+
+  hideLogin();
+  renderUserInfo();
+  enableInput();
+  await loadConversations();
+}
+
+function onSignedOut() {
+  authToken = null;
+  currentUser = null;
+  conversations = [];
+  activeConvId = null;
+  DOM.convList.innerHTML = '';
+  DOM.messages.innerHTML = '<div class="empty-hint">请登录后使用</div>';
+  DOM.mainTitle.textContent = 'AI 聊天';
+  disableInput();
+  DOM.sidebarFooter.innerHTML = '';
+  showLogin();
+}
+
+// ════════════════════════════════════════════════════════════════
+// API 请求封装
+// ════════════════════════════════════════════════════════════════
+async function refreshToken() {
+  if (clerkInstance && clerkInstance.session) {
+    authToken = await clerkInstance.session.getToken();
+  }
+}
+
+async function api(path, opts = {}) {
+  await refreshToken();
+  const res = await fetch(path, {
+    ...opts,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${authToken}`,
+      ...(opts.headers || {}),
+    },
   });
-
-  function mountSignInComponent() {
-    if (!clerkInstance) return;
-    const el = document.getElementById('clerk-signin-target');
-    if (el) {
-      clerkInstance.mountSignIn(el, {
-        afterSignInUrl: window.location.href,
-        routing: 'hash'
-      });
-    }
+  if (res.status === 401) {
+    onSignedOut();
+    throw new Error('认证过期');
   }
+  return res;
+}
 
-  function showLoginModal() {
-    loginModalEl.style.display = 'flex';
-  }
-
-  function hideLoginModal() {
-    loginModalEl.style.display = 'none';
-  }
-
-  function renderUserArea(user) {
-    userAreaEl.innerHTML = '';
-    if (!user) {
-      const loginBtn = document.createElement('button');
-      loginBtn.className = 'btn btn-primary';
-      loginBtn.textContent = '登录';
-      loginBtn.addEventListener('click', () => {
-        showLoginModal();
-        mountSignInComponent();
-      });
-      userAreaEl.appendChild(loginBtn);
-      return;
-    }
-
-    const avatar = document.createElement('img');
-    avatar.className = 'user-avatar';
-    avatar.src = user.imageUrl || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.firstName || user.username || 'User') + '&background=random';
-    avatar.alt = user.username || 'avatar';
-
-    const name = document.createElement('span');
-    name.className = 'user-name';
-    name.textContent = user.firstName || user.username || user.emailAddresses[0]?.emailAddress || '用户';
-
-    const logoutBtn = document.createElement('button');
-    logoutBtn.className = 'logout-btn';
-    logoutBtn.textContent = '退出';
-    logoutBtn.addEventListener('click', async () => {
-      await clerkInstance.signOut();
-    });
-
-    userAreaEl.appendChild(avatar);
-    userAreaEl.appendChild(name);
-    userAreaEl.appendChild(logoutBtn);
-  }
-
-  function enableChat() {
-    messageInputEl.disabled = false;
-    sendBtnEl.disabled = false;
-    messageInputEl.placeholder = '输入消息，回车发送，Shift+回车换行';
-  }
-
-  function disableChat() {
-    messageInputEl.disabled = true;
-    sendBtnEl.disabled = true;
-    messageInputEl.placeholder = '请先登录';
-  }
-
-  // ══════════════════════════════════════════════════════════════
-  // API 请求辅助函数（自动携带 Clerk Token）
-  // ══════════════════════════════════════════════════════════════
-  async function apiFetch(url, options = {}) {
-    const opts = {
-      ...options,
-      headers: {
-        ...(options.headers || {}),
-        'Content-Type': 'application/json'
-      }
-    };
-    if (sessionToken) {
-      opts.headers['Authorization'] = `Bearer ${sessionToken}`;
-    }
-    return fetch(url, opts);
-  }
-
-  // ══════════════════════════════════════════════════════════════
-  // 原有 UI 逻辑
-  // ══════════════════════════════════════════════════════════════
-  function toggleSidebar(show) {
-    if (show) {
-      sidebarEl.classList.add('open');
-      overlayEl.classList.add('show');
-    } else {
-      sidebarEl.classList.remove('open');
-      overlayEl.classList.remove('show');
-    }
-  }
-
-  menuBtnEl.addEventListener('click', () => toggleSidebar(true));
-  overlayEl.addEventListener('click', () => toggleSidebar(false));
-
-  function setLoading(loading) {
-    sendBtnEl.disabled = loading;
-    if (loading) {
-      sendBtnEl.classList.add('loading');
-    } else {
-      sendBtnEl.classList.remove('loading');
-    }
-  }
-
-  function autoResizeTextArea() {
-    messageInputEl.style.height = 'auto';
-    messageInputEl.style.height = Math.min(messageInputEl.scrollHeight, 180) + 'px';
-  }
-
-  function scrollToBottom() {
-    messagesEl.scrollTop = messagesEl.scrollHeight;
-  }
-
-  function renderConversations() {
-    conversationListEl.innerHTML = '';
-
-    conversations.forEach((conversation) => {
-      const item = document.createElement('div');
-      item.className = 'conversation-item' + (conversation.id === activeConversationId ? ' active' : '');
-
-      const title = document.createElement('div');
-      title.className = 'conversation-title';
-      title.textContent = conversation.title || '新对话';
-
-      const delBtn = document.createElement('button');
-      delBtn.className = 'delete-btn';
-      delBtn.textContent = '删除';
-      delBtn.addEventListener('click', async (event) => {
-        event.stopPropagation();
-
-        const ok = confirm('确认删除这个对话吗？删除后无法恢复。');
-        if (!ok) return;
-
-        await apiFetch(`/api/conversations/${conversation.id}`, { method: 'DELETE' });
-
-        if (activeConversationId === conversation.id) {
-          activeConversationId = null;
-          messagesEl.innerHTML = '';
-        }
-
-        await loadConversations(true);
-      });
-
-      item.appendChild(title);
-      item.appendChild(delBtn);
-
-      item.addEventListener('click', async () => {
-        activeConversationId = conversation.id;
-        chatTitleEl.textContent = conversation.title || '新对话';
-        renderConversations();
-        await loadMessages(conversation.id);
-        if (window.innerWidth <= 860) toggleSidebar(false);
-      });
-
-      conversationListEl.appendChild(item);
-    });
-  }
-
-  function renderMessage(role, content) {
-    const div = document.createElement('div');
-    div.className = `message ${role}`;
-
-    if (role === 'assistant') {
-      div.innerHTML = marked.parse(content || '');
-    } else {
-      div.textContent = content;
-    }
-
-    messagesEl.appendChild(div);
-  }
-
-  async function loadMessages(conversationId) {
-    const res = await apiFetch(`/api/conversations/${conversationId}/messages`);
-    if (!res.ok) {
-      const data = await res.json();
-      messagesEl.innerHTML = `<div style="text-align:center;color:#dc2626;padding:20px;">${data.message || '加载失败'}</div>`;
-      return;
-    }
-    const data = await res.json();
-
-    messagesEl.innerHTML = '';
-    data.forEach((msg) => renderMessage(msg.role, msg.content));
-    scrollToBottom();
-  }
-
-  async function createConversation() {
-    const res = await apiFetch('/api/conversations', {
-      method: 'POST',
-      body: JSON.stringify({})
-    });
-    return await res.json();
-  }
-
-  async function loadConversations(keepCurrent = false) {
-    const res = await apiFetch('/api/conversations');
-    if (!res.ok) {
-      const data = await res.json();
-      if (res.status === 401) {
-        showLoginModal();
-        mountSignInComponent();
-      }
-      return;
-    }
+// ════════════════════════════════════════════════════════════════
+// 对话列表
+// ════════════════════════════════════════════════════════════════
+async function loadConversations() {
+  try {
+    const res = await api('/api/conversations');
     conversations = await res.json();
-
-    if (conversations.length === 0) {
-      const newConv = await createConversation();
-      conversations = [newConv];
-    }
-
-    if (!keepCurrent || !activeConversationId) {
-      activeConversationId = conversations[0].id;
-    }
-
-    const current = conversations.find((c) => c.id === activeConversationId) || conversations[0];
-    activeConversationId = current.id;
-    chatTitleEl.textContent = current.title || '新对话';
-
-    renderConversations();
-    await loadMessages(activeConversationId);
+    renderConvList();
+  } catch (e) {
+    console.error('加载对话列表失败:', e);
   }
+}
 
-  async function sendMessage() {
-    const message = messageInputEl.value.trim();
-    if (!message || !activeConversationId) return;
+function renderConvList() {
+  DOM.convList.innerHTML = '';
+  if (conversations.length === 0) {
+    DOM.convList.innerHTML = '<div style="padding:20px;text-align:center;color:#64748b;font-size:13px;">暂无对话，点击上方新建</div>';
+    return;
+  }
+  conversations.forEach(c => {
+    const div = document.createElement('div');
+    div.className = 'conv-item' + (c.id === activeConvId ? ' active' : '');
+    div.innerHTML = `
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(c.title)}</span>
+      <button class="del-btn" title="删除">×</button>
+    `;
+    div.querySelector('span').onclick = () => selectConversation(c.id);
+    div.querySelector('.del-btn').onclick = (e) => { e.stopPropagation(); deleteConversation(c.id); };
+    DOM.convList.appendChild(div);
+  });
+}
 
-    renderMessage('user', message);
+async function selectConversation(id) {
+  activeConvId = id;
+  renderConvList();
+  enableInput();
+  const conv = conversations.find(c => c.id === id);
+  DOM.mainTitle.textContent = conv ? conv.title : 'AI 聊天';
+  await loadMessages(id);
+  closeMobileSidebar();
+}
+
+async function loadMessages(convId) {
+  DOM.messages.innerHTML = '';
+  try {
+    const res = await api(`/api/conversations/${convId}/messages`);
+    const msgs = await res.json();
+    if (msgs.length === 0) {
+      DOM.messages.innerHTML = '<div class="empty-hint">发送一条消息开始对话吧</div>';
+      return;
+    }
+    msgs.forEach(m => appendMessage(m.role, m.content));
     scrollToBottom();
+  } catch (e) {
+    console.error('加载消息失败:', e);
+  }
+}
 
-    messageInputEl.value = '';
-    autoResizeTextArea();
-    setLoading(true);
+async function createConversation() {
+  try {
+    const res = await api('/api/conversations', { method: 'POST' });
+    const conv = await res.json();
+    conversations.unshift(conv);
+    await selectConversation(conv.id);
+  } catch (e) {
+    console.error('创建对话失败:', e);
+  }
+}
 
-    try {
-      const res = await apiFetch('/api/chat', {
-        method: 'POST',
-        body: JSON.stringify({
-          conversation_id: activeConversationId,
-          message: message
-        })
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || '发送失败');
-      }
-
-      renderMessage('assistant', data.reply || '');
-      scrollToBottom();
-      await loadConversations(true);
-    } catch (error) {
-      renderMessage('assistant', `请求失败：${error.message}`);
-      scrollToBottom();
-    } finally {
-      setLoading(false);
+async function deleteConversation(id) {
+  try {
+    await api(`/api/conversations/${id}`, { method: 'DELETE' });
+    conversations = conversations.filter(c => c.id !== id);
+    if (activeConvId === id) {
+      activeConvId = null;
+      DOM.messages.innerHTML = '<div class="empty-hint">选择或新建一个对话开始聊天</div>';
+      DOM.mainTitle.textContent = 'AI 聊天';
+      disableInput();
     }
+    renderConvList();
+  } catch (e) {
+    console.error('删除对话失败:', e);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// 发送消息
+// ════════════════════════════════════════════════════════════════
+async function sendMessage() {
+  const text = DOM.inputBox.value.trim();
+  if (!text || !activeConvId || isSending) return;
+
+  isSending = true;
+  DOM.btnSend.disabled = true;
+  DOM.inputBox.value = '';
+  autoResize();
+
+  // 清除空提示
+  const hint = DOM.messages.querySelector('.empty-hint');
+  if (hint) hint.remove();
+
+  appendMessage('user', text);
+  scrollToBottom();
+
+  // 显示"正在输入"
+  const typing = document.createElement('div');
+  typing.className = 'typing-indicator';
+  typing.innerHTML = 'AI 正在思考<span class="dots"></span>';
+  DOM.messages.appendChild(typing);
+  scrollToBottom();
+
+  try {
+    const res = await api('/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ conversation_id: activeConvId, message: text }),
+    });
+    const data = await res.json();
+    typing.remove();
+
+    if (res.ok) {
+      appendMessage('assistant', data.reply);
+      // 刷新对话列表标题
+      await loadConversations();
+      renderConvList();
+    } else {
+      appendMessage('assistant', `⚠️ 错误: ${data.message || '请求失败'}`);
+    }
+  } catch (e) {
+    typing.remove();
+    appendMessage('assistant', `⚠️ 网络错误: ${e.message}`);
   }
 
-  sendBtnEl.addEventListener('click', sendMessage);
+  isSending = false;
+  DOM.btnSend.disabled = false;
+  DOM.inputBox.focus();
+  scrollToBottom();
+}
 
-  messageInputEl.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      sendMessage();
-    }
-  });
-
-  messageInputEl.addEventListener('input', autoResizeTextArea);
-
-  newConversationBtnEl.addEventListener('click', async () => {
-    await createConversation();
-    await loadConversations();
-    if (window.innerWidth <= 860) toggleSidebar(false);
-  });
-
-  // 如果登录后自动加载对话
-  if (window.Clerk && window.Clerk.user) {
-    loadConversations();
+// ════════════════════════════════════════════════════════════════
+// DOM 操作
+// ════════════════════════════════════════════════════════════════
+function appendMessage(role, content) {
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  if (role === 'assistant') {
+    div.innerHTML = marked.parse(content);
+  } else {
+    div.textContent = content;
   }
+  DOM.messages.appendChild(div);
+}
+
+function scrollToBottom() {
+  requestAnimationFrame(() => {
+    DOM.messages.scrollTop = DOM.messages.scrollHeight;
+  });
+}
+
+function renderUserInfo() {
+  if (!currentUser) return;
+  const name = currentUser.firstName || currentUser.username ||
+    (currentUser.emailAddresses && currentUser.emailAddresses[0] && currentUser.emailAddresses[0].emailAddress) || '用户';
+  const avatar = currentUser.imageUrl;
+  DOM.sidebarFooter.innerHTML = `
+    <div class="user-info">
+      ${avatar ? `<img src="${avatar}" alt="avatar">` : ''}
+      <span class="user-name">${escHtml(name)}</span>
+      <button class="btn-logout" id="btnLogout">退出</button>
+    </div>
+  `;
+  document.getElementById('btnLogout').onclick = () => clerkInstance.signOut();
+}
+
+function enableInput() {
+  if (activeConvId) {
+    DOM.inputBox.disabled = false;
+    DOM.btnSend.disabled = false;
+  }
+}
+
+function disableInput() {
+  DOM.inputBox.disabled = true;
+  DOM.btnSend.disabled = true;
+}
+
+function autoResize() {
+  DOM.inputBox.style.height = 'auto';
+  DOM.inputBox.style.height = Math.min(DOM.inputBox.scrollHeight, 120) + 'px';
+}
+
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ════════════════════════════════════════════════════════════════
+// 移动端侧边栏
+// ════════════════════════════════════════════════════════════════
+function openMobileSidebar() {
+  DOM.sidebar.classList.add('open');
+  DOM.mobileOverlay.classList.remove('hidden');
+}
+
+function closeMobileSidebar() {
+  DOM.sidebar.classList.remove('open');
+  DOM.mobileOverlay.classList.add('hidden');
+}
+
+// ════════════════════════════════════════════════════════════════
+// 事件绑定
+// ════════════════════════════════════════════════════════════════
+DOM.btnNew.onclick = createConversation;
+DOM.btnSend.onclick = sendMessage;
+DOM.menuBtn.onclick = openMobileSidebar;
+DOM.mobileOverlay.onclick = closeMobileSidebar;
+
+DOM.inputBox.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+DOM.inputBox.addEventListener('input', autoResize);
 </script>
 </body>
 </html>
