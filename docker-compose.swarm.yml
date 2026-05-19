@@ -52,6 +52,9 @@ services:
     configs:
       - source: caddy_config
         target: /etc/caddy/Caddyfile
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
     deploy:
       replicas: 1
       placement:
@@ -76,6 +79,10 @@ networks:
 
 volumes:
   chat-app-data:
+    driver: local
+  caddy-data:
+    driver: local
+  caddy-config:
     driver: local
 
 configs:

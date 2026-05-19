@@ -377,6 +377,32 @@ def chat():
     return jsonify({"reply": ai_reply})
 
 
+@app.route("/api/account", methods=["DELETE"])
+@clerk_required
+def delete_account():
+    """删除当前用户的所有数据（对话、消息、用户记录）。"""
+    user = get_current_user()
+    user_id = user["id"]
+
+    with get_conn() as conn:
+        cursor = conn.cursor()
+        # 先删所有消息
+        cursor.execute(
+            """
+            DELETE FROM messages WHERE conversation_id IN (
+                SELECT id FROM conversations WHERE user_id = ?
+            )
+            """,
+            (user_id,),
+        )
+        # 再删所有对话
+        cursor.execute("DELETE FROM conversations WHERE user_id = ?", (user_id,))
+        # 最后删用户
+        cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        conn.commit()
+
+    return jsonify({"ok": True, "message": "账号数据已删除"})
+
 
 # 统一错误处理
 @app.errorhandler(404)

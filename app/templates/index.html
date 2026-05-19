@@ -99,13 +99,19 @@
       border-top: 1px solid rgba(255,255,255,.08);
       font-size: 13px;
       color: #94a3b8;
+      position: relative;
     }
 
     .user-info {
       display: flex;
       align-items: center;
       gap: 10px;
+      cursor: pointer;
+      user-select: none;
+      position: relative;
     }
+
+    .user-info:hover { opacity: .85; }
 
     .user-info img {
       width: 32px;
@@ -115,18 +121,180 @@
 
     .user-info .user-name { font-weight: 500; color: #e2e8f0; }
 
-    .btn-logout {
-      background: none;
-      border: 1px solid #475569;
-      color: #94a3b8;
-      border-radius: 6px;
-      padding: 4px 10px;
-      font-size: 12px;
-      cursor: pointer;
-      margin-left: auto;
-      transition: all .2s;
+    /* ── 用户面板 ── */
+    .user-panel {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 0;
+      right: 0;
+      background: #1e293b;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.4);
+      padding: 0;
+      z-index: 50;
+      overflow: hidden;
+      opacity: 0;
+      transform: translateY(8px);
+      pointer-events: none;
+      transition: opacity .2s, transform .2s;
     }
-    .btn-logout:hover { border-color: #f87171; color: #f87171; }
+
+    .user-panel.show {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .user-panel-header {
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+
+    .user-panel-header img {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .user-panel-header .panel-user-detail {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .user-panel-header .panel-user-name {
+      font-weight: 600;
+      font-size: 14px;
+      color: #f1f5f9;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .user-panel-header .panel-user-email {
+      font-size: 12px;
+      color: #64748b;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+
+    .user-panel-actions {
+      padding: 6px;
+    }
+
+    .user-panel-actions button {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 10px 12px;
+      background: none;
+      border: none;
+      color: #cbd5e1;
+      font-size: 13px;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: background .15s;
+    }
+
+    .user-panel-actions button:hover {
+      background: rgba(255,255,255,.06);
+    }
+
+    .user-panel-actions button .panel-icon {
+      width: 18px;
+      text-align: center;
+      font-size: 15px;
+      flex-shrink: 0;
+    }
+
+    .user-panel-actions .divider {
+      height: 1px;
+      background: rgba(255,255,255,.06);
+      margin: 4px 6px;
+    }
+
+    .user-panel-actions button.danger {
+      color: #f87171;
+    }
+    .user-panel-actions button.danger:hover {
+      background: rgba(248,113,113,.1);
+    }
+
+    /* ── 确认弹窗 ── */
+    .confirm-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.55);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .confirm-box {
+      background: #fff;
+      border-radius: 14px;
+      padding: 28px;
+      max-width: 380px;
+      width: 90%;
+      box-shadow: 0 12px 40px rgba(0,0,0,.2);
+      text-align: center;
+    }
+
+    .confirm-box .confirm-icon {
+      font-size: 36px;
+      margin-bottom: 12px;
+    }
+
+    .confirm-box h3 {
+      font-size: 17px;
+      font-weight: 600;
+      color: #1a1a2e;
+      margin-bottom: 8px;
+    }
+
+    .confirm-box p {
+      font-size: 13px;
+      color: #6b7280;
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+
+    .confirm-box .confirm-btns {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+
+    .confirm-box .btn-cancel {
+      padding: 8px 22px;
+      border-radius: 8px;
+      border: 1px solid #d1d5db;
+      background: #fff;
+      color: #374151;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .confirm-box .btn-cancel:hover { background: #f3f4f6; }
+
+    .confirm-box .btn-danger {
+      padding: 8px 22px;
+      border-radius: 8px;
+      border: none;
+      background: #ef4444;
+      color: #fff;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .confirm-box .btn-danger:hover { background: #dc2626; }
 
     /* ── 主区域 ── */
     .main {
@@ -348,6 +516,19 @@
 <!-- 登录遮罩 -->
 <div class="login-overlay hidden" id="loginOverlay">
   <div id="clerkSignIn"></div>
+</div>
+
+<!-- 删除账号确认弹窗 -->
+<div class="confirm-overlay hidden" id="confirmOverlay">
+  <div class="confirm-box">
+    <div class="confirm-icon">⚠️</div>
+    <h3>确认删除账号？</h3>
+    <p>此操作将永久删除您的所有对话记录和账号数据，且无法恢复。</p>
+    <div class="confirm-btns">
+      <button class="btn-cancel" id="btnCancelDelete">取消</button>
+      <button class="btn-danger" id="btnConfirmDelete">确认删除</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -634,16 +815,113 @@ function renderUserInfo() {
   if (!currentUser) return;
   const name = currentUser.firstName || currentUser.username ||
     (currentUser.emailAddresses && currentUser.emailAddresses[0] && currentUser.emailAddresses[0].emailAddress) || '用户';
+  const email = (currentUser.emailAddresses && currentUser.emailAddresses[0] && currentUser.emailAddresses[0].emailAddress) || '';
   const avatar = currentUser.imageUrl;
+
   DOM.sidebarFooter.innerHTML = `
-    <div class="user-info">
+    <div class="user-panel" id="userPanel">
+      <div class="user-panel-header">
+        ${avatar ? `<img src="${avatar}" alt="avatar">` : ''}
+        <div class="panel-user-detail">
+          <div class="panel-user-name">${escHtml(name)}</div>
+          ${email ? `<div class="panel-user-email">${escHtml(email)}</div>` : ''}
+        </div>
+      </div>
+      <div class="user-panel-actions">
+        <button id="btnPanelProfile" title="管理账号">
+          <span class="panel-icon">👤</span> 管理账号
+        </button>
+        <button id="btnPanelLogout" title="退出登录">
+          <span class="panel-icon">🚪</span> 退出登录
+        </button>
+        <div class="divider"></div>
+        <button id="btnPanelDelete" class="danger" title="删除账号">
+          <span class="panel-icon">🗑️</span> 删除账号
+        </button>
+      </div>
+    </div>
+    <div class="user-info" id="userInfoTrigger">
       ${avatar ? `<img src="${avatar}" alt="avatar">` : ''}
       <span class="user-name">${escHtml(name)}</span>
-      <button class="btn-logout" id="btnLogout">退出</button>
+      <span style="margin-left:auto;font-size:16px;color:#64748b;">⋯</span>
     </div>
   `;
-  document.getElementById('btnLogout').onclick = () => clerkInstance.signOut();
+
+  // 点击头像区域 → 切换面板
+  document.getElementById('userInfoTrigger').onclick = (e) => {
+    e.stopPropagation();
+    const panel = document.getElementById('userPanel');
+    panel.classList.toggle('show');
+  };
+
+  // 面板内部点击不冒泡（防止被 document click 关闭）
+  document.getElementById('userPanel').onclick = (e) => {
+    e.stopPropagation();
+  };
+
+  // 管理账号 → 打开 Clerk 用户页
+  document.getElementById('btnPanelProfile').onclick = () => {
+    closeUserPanel();
+    if (clerkInstance && clerkInstance.openUserProfile) {
+      clerkInstance.openUserProfile();
+    }
+  };
+
+  // 退出登录
+  document.getElementById('btnPanelLogout').onclick = () => {
+    closeUserPanel();
+    clerkInstance.signOut();
+  };
+
+  // 删除账号 → 显示确认弹窗
+  document.getElementById('btnPanelDelete').onclick = () => {
+    closeUserPanel();
+    $('confirmOverlay').classList.remove('hidden');
+  };
 }
+
+function closeUserPanel() {
+  const panel = document.getElementById('userPanel');
+  if (panel) panel.classList.remove('show');
+}
+
+// 点击页面其他区域关闭面板
+document.addEventListener('click', () => closeUserPanel());
+
+// 删除账号确认/取消
+document.addEventListener('DOMContentLoaded', () => {
+  // 取消
+  $('btnCancelDelete').onclick = () => {
+    $('confirmOverlay').classList.add('hidden');
+  };
+  // 确认删除
+  $('btnConfirmDelete').onclick = async () => {
+    const btn = $('btnConfirmDelete');
+    btn.disabled = true;
+    btn.textContent = '删除中...';
+    try {
+      const res = await api('/api/account', { method: 'DELETE' });
+      if (res.ok) {
+        $('confirmOverlay').classList.add('hidden');
+        // 登出 Clerk
+        await clerkInstance.signOut();
+      } else {
+        const data = await res.json();
+        alert('删除失败: ' + (data.message || '未知错误'));
+      }
+    } catch (e) {
+      alert('删除失败: ' + e.message);
+    }
+    btn.disabled = false;
+    btn.textContent = '确认删除';
+  };
+  // 点击遮罩关闭
+  $('confirmOverlay').onclick = (e) => {
+    if (e.target === $('confirmOverlay')) {
+      $('confirmOverlay').classList.add('hidden');
+    }
+  };
+});
 
 function enableInput() {
   if (activeConvId) {
