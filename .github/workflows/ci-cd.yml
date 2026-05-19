@@ -130,6 +130,11 @@ jobs:
           CLERK_FRONTEND_API=${{ secrets.CLERK_FRONTEND_API }}
           ENVEOF
 
+            # 先移除旧 stack（解决 Swarm config 不可变的问题）
+            docker stack rm chat-app 2>/dev/null || true
+            # 等待旧服务完全清理
+            sleep 10
+
             # 设置镜像相关的环境变量（用于 docker stack deploy 替换 compose 文件中的变量）
             export DOCKER_REGISTRY="${{ env.REGISTRY }}"
             export DOCKER_IMAGE_OWNER="${{ github.repository_owner }}"
