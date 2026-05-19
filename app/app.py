@@ -142,11 +142,12 @@ def health():
 
 
 CLERK_PUBLISHABLE_KEY = os.environ.get("CLERK_PUBLISHABLE_KEY", "")
+CLERK_FRONTEND_API = os.environ.get("CLERK_FRONTEND_API", "")
 
 
 @app.route("/")
 def index():
-    return render_template("index.html", clerk_publishable_key=CLERK_PUBLISHABLE_KEY)
+    return render_template("index.html", clerk_publishable_key=CLERK_PUBLISHABLE_KEY, clerk_frontend_api=CLERK_FRONTEND_API)
 
 
 
