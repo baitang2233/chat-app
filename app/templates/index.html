@@ -541,6 +541,8 @@ let currentUser = null;
 let conversations = [];
 let activeConvId = null;
 let isSending = false;
+let isSignedIn = false;       // 防止 listener 重复触发
+let authProcessing = false;   // 防止并发 onSignedIn
 
 const $ = id => document.getElementById(id);
 
@@ -568,20 +570,21 @@ window.addEventListener('load', async () => {
     await window.Clerk.load();
     clerkInstance = window.Clerk;
 
+    // 监听登录/登出（先注册再检查状态，避免遗漏事件）
+    clerkInstance.addListener(({ user }) => {
+      if (user && !isSignedIn) {
+        onSignedIn();
+      } else if (!user && isSignedIn) {
+        onSignedOut();
+      }
+    });
+
+    // 初始状态检查
     if (clerkInstance.user) {
       await onSignedIn();
     } else {
       showLogin();
     }
-
-    // 监听登录/登出
-    clerkInstance.addListener(({ user }) => {
-      if (user) {
-        onSignedIn();
-      } else {
-        onSignedOut();
-      }
-    });
   } catch (e) {
     console.error('Clerk 初始化失败:', e);
     DOM.emptyHint.textContent = 'Clerk 加载失败，请刷新页面重试';
@@ -589,30 +592,50 @@ window.addEventListener('load', async () => {
 });
 
 function showLogin() {
+  if (!DOM.loginOverlay.classList.contains('hidden')) return; // 已经在显示了
   DOM.loginOverlay.classList.remove('hidden');
   clerkInstance.mountSignIn(DOM.clerkSignIn);
 }
 
 function hideLogin() {
+  if (DOM.loginOverlay.classList.contains('hidden')) return; // 已经隐藏了
   DOM.loginOverlay.classList.add('hidden');
   clerkInstance.unmountSignIn(DOM.clerkSignIn);
 }
 
 async function onSignedIn() {
-  // 获取 session token
-  const session = clerkInstance.session;
-  if (session) {
-    authToken = await session.getToken();
-  }
-  currentUser = clerkInstance.user;
+  if (authProcessing || isSignedIn) return; // 防止重入
+  authProcessing = true;
+  isSignedIn = true;
 
-  hideLogin();
-  renderUserInfo();
-  enableInput();
-  await loadConversations();
+  try {
+    const session = clerkInstance.session;
+    if (session) {
+      authToken = await session.getToken();
+    }
+    currentUser = clerkInstance.user;
+
+    hideLogin();
+    renderUserInfo();
+    enableInput();
+    await loadConversations();
+
+    // 如果没有任何对话，自动新建一个
+    if (conversations.length === 0) {
+      await createConversation();
+    } else if (!activeConvId) {
+      // 有对话但没选中，默认选中第一个
+      await selectConversation(conversations[0].id);
+    }
+  } finally {
+    authProcessing = false;
+  }
 }
 
 function onSignedOut() {
+  if (!isSignedIn) return; // 已经是登出状态
+  isSignedIn = false;
+  authProcessing = false;
   authToken = null;
   currentUser = null;
   conversations = [];
@@ -645,7 +668,7 @@ async function api(path, opts = {}) {
     },
   });
   if (res.status === 401) {
-    onSignedOut();
+    if (isSignedIn) onSignedOut();
     throw new Error('认证过期');
   }
   return res;
