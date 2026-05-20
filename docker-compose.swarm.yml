@@ -5,7 +5,7 @@ services:
     image: ${DOCKER_REGISTRY:-ghcr.io}/${DOCKER_IMAGE_OWNER:-yourname}/${DOCKER_IMAGE_NAME:-chat-app}:${IMAGE_TAG:-latest}
     env_file: .env
     deploy:
-      replicas: 3
+      replicas: 1
       update_config:
         parallelism: 1
         delay: 15s
