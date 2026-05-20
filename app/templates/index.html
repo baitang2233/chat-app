@@ -6,8 +6,7 @@
   <title>AI 聊天助手</title>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
-  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
   <script
     async crossorigin="anonymous"
     data-clerk-publishable-key="{{ clerk_publishable_key }}"
@@ -591,25 +590,77 @@ const DOM = {
 };
 
 // ════════════════════════════════════════════════════════════════
-// marked.js 配置 — 避免将 LaTeX $...$ 中的 _ 解析为斜体
+// marked.js 配置
 // ════════════════════════════════════════════════════════════════
 marked.setOptions({ breaks: true, gfm: true });
 
 // ════════════════════════════════════════════════════════════════
-// LaTeX 渲染
+// LaTeX 保护 + 渲染
+// marked.js 会吞掉反斜杠，必须先提取 LaTeX 块用占位符保护
 // ════════════════════════════════════════════════════════════════
-function renderLatex(el) {
-  if (typeof renderMathInElement !== 'undefined') {
-    renderMathInElement(el, {
-      delimiters: [
-        { left: '$$', right: '$$', display: true },
-        { left: '$', right: '$', display: false },
-        { left: '\\(', right: '\\)', display: false },
-        { left: '\\[', right: '\\]', display: true },
-      ],
-      throwOnError: false,
-    });
-  }
+function renderMarkdownWithLatex(text) {
+  if (!text) return '';
+  const placeholders = [];
+  let idx = 0;
+
+  // 保护代码块 (```...```) 不被 LaTeX 提取干扰
+  const codeBlocks = [];
+  text = text.replace(/(```[\s\S]*?```|`[^`\n]+`)/g, (m) => {
+    const key = '%%CODE' + codeBlocks.length + '%%';
+    codeBlocks.push(m);
+    return key;
+  });
+
+  // 提取 display math: $$...$$ 和 \[...\]
+  text = text.replace(/\$\$([\s\S]+?)\$\$/g, (m, p1) => {
+    const key = '%%MATH' + idx + '%%';
+    placeholders[idx] = { tex: p1.trim(), display: true };
+    idx++;
+    return key;
+  });
+  text = text.replace(/\\\[([\s\S]+?)\\\]/g, (m, p1) => {
+    const key = '%%MATH' + idx + '%%';
+    placeholders[idx] = { tex: p1.trim(), display: true };
+    idx++;
+    return key;
+  });
+
+  // 提取 inline math: $...$ 和 \(...\)
+  text = text.replace(/\\\(([\s\S]+?)\\\)/g, (m, p1) => {
+    const key = '%%MATH' + idx + '%%';
+    placeholders[idx] = { tex: p1.trim(), display: false };
+    idx++;
+    return key;
+  });
+  // 单 $ — 避免误匹配货币符号，要求 $ 后紧跟非空格
+  text = text.replace(/\$([^$\n]+?)\$/g, (m, p1) => {
+    const key = '%%MATH' + idx + '%%';
+    placeholders[idx] = { tex: p1.trim(), display: false };
+    idx++;
+    return key;
+  });
+
+  // 还原代码块
+  text = text.replace(/%%CODE(\d+)%%/g, (m, i) => codeBlocks[parseInt(i)]);
+
+  // marked 渲染 markdown
+  let html = marked.parse(text);
+
+  // 还原 LaTeX — 用 KaTeX 直接渲染为 HTML
+  html = html.replace(/%%MATH(\d+)%%/g, (m, i) => {
+    const item = placeholders[parseInt(i)];
+    if (!item) return m;
+    try {
+      return katex.renderToString(item.tex, {
+        displayMode: item.display,
+        throwOnError: false,
+      });
+    } catch (e) {
+      return item.tex;
+    }
+  });
+
+  return html;
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -846,8 +897,7 @@ async function sendMessage() {
 
           if (evt.type === 'content') {
             fullContent += evt.content;
-            contentDiv.innerHTML = marked.parse(fullContent);
-            renderLatex(contentDiv);
+            contentDiv.innerHTML = renderMarkdownWithLatex(fullContent);
             scrollToBottom();
           }
 
@@ -870,8 +920,7 @@ async function sendMessage() {
 
     contentDiv.classList.remove('streaming-cursor');
     if (fullContent) {
-      contentDiv.innerHTML = marked.parse(fullContent);
-      renderLatex(contentDiv);
+      contentDiv.innerHTML = renderMarkdownWithLatex(fullContent);
     }
 
     await loadConversations();
@@ -914,8 +963,7 @@ function appendMessage(role, content, reasoning) {
 
     const div = document.createElement('div');
     div.className = 'msg-assistant';
-    div.innerHTML = marked.parse(content || '');
-    renderLatex(div);
+    div.innerHTML = renderMarkdownWithLatex(content || '');
     group.appendChild(div);
     DOM.messages.appendChild(group);
   }
