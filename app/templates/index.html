@@ -725,8 +725,12 @@ async function loadMessages(convId) {
   DOM.messages.innerHTML = '';
   try {
     const res = await api(`/api/conversations/${convId}/messages`);
+    if (!res.ok) {
+      DOM.messages.innerHTML = '<div class="empty-hint">加载消息失败</div>';
+      return;
+    }
     const msgs = await res.json();
-    if (msgs.length === 0) {
+    if (!Array.isArray(msgs) || msgs.length === 0) {
       DOM.messages.innerHTML = '<div class="empty-hint">发送一条消息开始对话吧</div>';
       return;
     }
