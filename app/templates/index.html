@@ -543,6 +543,7 @@ let activeConvId = null;
 let isSending = false;
 let isSignedIn = false;       // 防止 listener 重复触发
 let authProcessing = false;   // 防止并发 onSignedIn
+let loginMounted = false;     // 防止重复 mount SignIn 组件
 
 const $ = id => document.getElementById(id);
 
@@ -592,15 +593,19 @@ window.addEventListener('load', async () => {
 });
 
 function showLogin() {
-  if (!DOM.loginOverlay.classList.contains('hidden')) return; // 已经在显示了
   DOM.loginOverlay.classList.remove('hidden');
-  clerkInstance.mountSignIn(DOM.clerkSignIn);
+  if (!loginMounted) {
+    clerkInstance.mountSignIn(DOM.clerkSignIn);
+    loginMounted = true;
+  }
 }
 
 function hideLogin() {
-  if (DOM.loginOverlay.classList.contains('hidden')) return; // 已经隐藏了
   DOM.loginOverlay.classList.add('hidden');
-  clerkInstance.unmountSignIn(DOM.clerkSignIn);
+  if (loginMounted) {
+    clerkInstance.unmountSignIn(DOM.clerkSignIn);
+    loginMounted = false;
+  }
 }
 
 async function onSignedIn() {
@@ -667,10 +672,8 @@ async function api(path, opts = {}) {
       ...(opts.headers || {}),
     },
   });
-  if (res.status === 401) {
-    if (isSignedIn) onSignedOut();
-    throw new Error('认证过期');
-  }
+  // 不再自动调用 onSignedOut，避免与 Clerk listener 形成无限循环
+  // 401 只抛错，由调用方处理
   return res;
 }
 
