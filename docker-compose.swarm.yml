@@ -1,11 +1,44 @@
 version: "3.8"
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: chatapp
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chatapp}
+      POSTGRES_DB: chatapp
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    networks:
+      - chat-app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chatapp -d chatapp"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   web:
     image: ${DOCKER_REGISTRY:-ghcr.io}/${DOCKER_IMAGE_OWNER:-yourname}/${DOCKER_IMAGE_NAME:-chat-app}:${IMAGE_TAG:-latest}
     env_file: .env
     deploy:
-      replicas: 1
+      replicas: 3
       update_config:
         parallelism: 1
         delay: 15s
@@ -31,8 +64,6 @@ services:
           memory: 128M
     networks:
       - chat-app-network
-    volumes:
-      - chat-app-data:/data
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')"]
       interval: 30s
@@ -78,7 +109,7 @@ networks:
         - subnet: 10.0.10.0/24
 
 volumes:
-  chat-app-data:
+  postgres-data:
     driver: local
   caddy-data:
     driver: local

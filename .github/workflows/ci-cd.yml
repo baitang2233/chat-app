@@ -122,7 +122,8 @@ jobs:
             # 写入应用环境变量文件
             cat > .env << 'ENVEOF'
           API_KEY=${{ secrets.API_KEY }}
-          DB_PATH=/data/chat.db
+          DATABASE_URL=postgresql://chatapp:${{ secrets.POSTGRES_PASSWORD }}@postgres:5432/chatapp
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
           MODEL_NAME=${{ secrets.MODEL_NAME }}
           LLM_API_URL=${{ secrets.LLM_API_URL }}
           CLERK_PUBLISHABLE_KEY=${{ secrets.CLERK_PUBLISHABLE_KEY }}
@@ -140,6 +141,7 @@ jobs:
             export DOCKER_IMAGE_OWNER="${{ github.repository_owner }}"
             export DOCKER_IMAGE_NAME=$(echo "${{ env.IMAGE_NAME }}" | cut -d'/' -f2)
             export IMAGE_TAG="sha-${{ steps.sha.outputs.short }}"
+            export POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}"
 
             # 登录容器仓库
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin

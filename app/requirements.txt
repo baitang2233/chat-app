@@ -2,3 +2,4 @@ flask
 requests
 gunicorn
 pyjwt[crypto]
+psycopg2-binary
