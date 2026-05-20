@@ -4,6 +4,7 @@ chat.wafy123.me {
         health_uri /api/health
         health_interval 30s
         health_timeout 10s
+        flush_interval -1
     }
 }
 

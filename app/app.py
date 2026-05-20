@@ -1,10 +1,12 @@
+import json
 import os
+import time
 from datetime import datetime, timezone
 
 import psycopg2
 import psycopg2.extras
 import requests
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request, stream_with_context
 
 from clerk_middleware import clerk_required, get_current_user
 
@@ -50,6 +52,7 @@ def init_db():
                         conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
                         role TEXT NOT NULL,
                         content TEXT NOT NULL,
+                        reasoning_content TEXT DEFAULT '',
                         created_at TIMESTAMPTZ NOT NULL
                     )
                 """)
@@ -58,6 +61,13 @@ def init_db():
                 """)
                 cur.execute("""
                     CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id)
+                """)
+                # 兼容旧表：添加 reasoning_content 列
+                cur.execute("""
+                    DO $$ BEGIN
+                        ALTER TABLE messages ADD COLUMN reasoning_content TEXT DEFAULT '';
+                    EXCEPTION WHEN duplicate_column THEN NULL;
+                    END $$
                 """)
     finally:
         conn.close()
@@ -142,7 +152,6 @@ def list_conversations():
     finally:
         conn.close()
 
-    # 序列化 datetime
     for c in conversations:
         c["created_at"] = c["created_at"].isoformat() if c["created_at"] else None
 
@@ -214,7 +223,7 @@ def get_messages(conversation_id):
             if not cur.fetchone():
                 return jsonify({"error": "Forbidden", "message": "无权限访问该对话"}), 403
             cur.execute(
-                "SELECT id, role, content, created_at FROM messages WHERE conversation_id = %s ORDER BY id ASC",
+                "SELECT id, role, content, reasoning_content, created_at FROM messages WHERE conversation_id = %s ORDER BY id ASC",
                 (conversation_id,),
             )
             messages = cur.fetchall()
@@ -227,7 +236,7 @@ def get_messages(conversation_id):
     return jsonify(messages)
 
 
-# ── 聊天 ──
+# ── 聊天（流式传输） ──
 
 def update_title_if_first_message(conversation_id, first_user_message):
     """如果当前对话标题还是默认的，就用第一条用户消息前20个字符作为标题。"""
@@ -248,27 +257,6 @@ def update_title_if_first_message(conversation_id, first_user_message):
         conn.close()
 
 
-def call_llm(messages):
-    """调用 OpenAI 兼容接口。"""
-    if not API_KEY:
-        raise ValueError("缺少 API_KEY 环境变量")
-
-    headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "model": MODEL_NAME,
-        "messages": messages,
-        "temperature": 0.7,
-    }
-
-    resp = requests.post(LLM_API_URL, headers=headers, json=payload, timeout=60)
-    resp.raise_for_status()
-    data = resp.json()
-    return data["choices"][0]["message"]["content"]
-
-
 @app.route("/api/chat", methods=["POST"])
 @clerk_required
 def chat():
@@ -278,10 +266,12 @@ def chat():
     body = request.get_json(silent=True) or {}
     conversation_id = body.get("conversation_id")
     user_message = (body.get("message") or "").strip()
+    enable_thinking = body.get("thinking", False)
 
     if not conversation_id or not user_message:
         return jsonify({"error": "BadRequest", "message": "conversation_id 和 message 不能为空"}), 400
 
+    # 验证权限并保存用户消息
     conn = get_conn()
     try:
         with conn:
@@ -315,25 +305,118 @@ def chat():
 
     history_messages = [{"role": r["role"], "content": r["content"]} for r in rows]
 
-    try:
-        ai_reply = call_llm(history_messages)
-    except requests.RequestException as exc:
-        return jsonify({"error": "UpstreamError", "message": f"调用模型接口失败: {str(exc)}"}), 502
-    except Exception as exc:
-        return jsonify({"error": "ServerError", "message": f"服务异常: {str(exc)}"}), 500
+    def generate():
+        """SSE 流式生成器"""
+        if not API_KEY:
+            yield f"data: {json.dumps({'error': '缺少 API_KEY 环境变量'})}\n\n"
+            return
+
+        headers = {
+            "Authorization": f"Bearer {API_KEY}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": MODEL_NAME,
+            "messages": history_messages,
+            "temperature": 0.7,
+            "stream": True,
+        }
+
+        if enable_thinking:
+            payload["enable_thinking"] = True
+
+        full_content = ""
+        full_reasoning = ""
+
+        try:
+            resp = requests.post(LLM_API_URL, headers=headers, json=payload, timeout=120, stream=True)
+            resp.raise_for_status()
+
+            for line in resp.iter_lines(decode_unicode=True):
+                if not line or not line.startswith("data: "):
+                    continue
+                data_str = line[6:]
+                if data_str.strip() == "[DONE]":
+                    break
+
+                try:
+                    chunk = json.loads(data_str)
+                    delta = chunk.get("choices", [{}])[0].get("delta", {})
+
+                    reasoning = delta.get("reasoning_content", "")
+                    if reasoning:
+                        full_reasoning += reasoning
+                        yield f"data: {json.dumps({'type': 'reasoning', 'content': reasoning})}\n\n"
+
+                    content = delta.get("content", "")
+                    if content:
+                        full_content += content
+                        yield f"data: {json.dumps({'type': 'content', 'content': content})}\n\n"
+
+                except json.JSONDecodeError:
+                    continue
+
+            # 流结束，保存到数据库
+            if full_content:
+                conn2 = get_conn()
+                try:
+                    with conn2:
+                        with conn2.cursor() as cur2:
+                            cur2.execute(
+                                "INSERT INTO messages (conversation_id, role, content, reasoning_content, created_at) VALUES (%s, %s, %s, %s, %s)",
+                                (conversation_id, "assistant", full_content, full_reasoning, now_str()),
+                            )
+                finally:
+                    conn2.close()
+
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+        except requests.RequestException as exc:
+            yield f"data: {json.dumps({'type': 'error', 'content': f'调用模型接口失败: {str(exc)}'})}\n\n"
+        except Exception as exc:
+            yield f"data: {json.dumps({'type': 'error', 'content': f'服务异常: {str(exc)}'})}\n\n"
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+# ── 搜索对话 ──
+
+@app.route("/api/conversations/search", methods=["GET"])
+@clerk_required
+def search_conversations():
+    user = get_current_user()
+    user_id = user["id"]
+    query = request.args.get("q", "").strip()
+
+    if not query:
+        return jsonify([])
 
     conn = get_conn()
     try:
-        with conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "INSERT INTO messages (conversation_id, role, content, created_at) VALUES (%s, %s, %s, %s)",
-                    (conversation_id, "assistant", ai_reply, now_str()),
-                )
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """SELECT DISTINCT c.id, c.title, c.created_at
+                   FROM conversations c
+                   LEFT JOIN messages m ON m.conversation_id = c.id
+                   WHERE c.user_id = %s AND (c.title ILIKE %s OR m.content ILIKE %s)
+                   ORDER BY c.id DESC LIMIT 20""",
+                (user_id, f"%{query}%", f"%{query}%"),
+            )
+            results = cur.fetchall()
     finally:
         conn.close()
 
-    return jsonify({"reply": ai_reply})
+    for r in results:
+        r["created_at"] = r["created_at"].isoformat() if r["created_at"] else None
+
+    return jsonify(results)
 
 
 # ── 删除账号 ──
@@ -376,8 +459,6 @@ def internal_error(e):
 
 
 # 启动时自动建表（带重试，等待 PostgreSQL 启动）
-import time
-
 for _attempt in range(10):
     try:
         init_db()
