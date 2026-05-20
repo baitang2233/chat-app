@@ -323,7 +323,8 @@ def chat():
         }
 
         if enable_thinking:
-            payload["enable_thinking"] = True
+            payload["thinking"] = {"type": "enabled"}
+            payload.pop("temperature", None)
 
         full_content = ""
         full_reasoning = ""
